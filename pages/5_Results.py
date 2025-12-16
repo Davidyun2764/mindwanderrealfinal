@@ -22,12 +22,19 @@ if last is not None:
     st.write(f"- 추천 자극: **{STIMULI.get(last.get('recommended_stim'), last.get('recommended_stim'))}** ({last.get('recommend_reason')})")
     st.write(f"- 선택 자극: **{STIMULI.get(last.get('chosen_stim'), last.get('chosen_stim'))}**")
 
+    # ✅ Easy-MWI 표시(추가)
+    if last.get("easy_mwi", None) is not None:
+        st.success(f"🟢 Easy-MWI: **{float(last.get('easy_mwi')):.4f}** (질문1~3 기반)")
+    else:
+        st.info("Easy-MWI 기록이 없습니다.")
+
+    # 기존 정량 MWI 표시(그대로)
     mwi = last.get("mwi", None)
     if mwi is None or (isinstance(mwi, float) and np.isnan(mwi)):
-        st.warning("MWI가 계산되지 않았어요(휴식 전/후 측정값이 부족). 그래도 로그/추천 결과는 저장되었습니다.")
+        st.warning("정량 MWI가 계산되지 않았어요(휴식 전/후 측정값이 부족). 그래도 로그/추천 결과는 저장되었습니다.")
     else:
-        st.success(f"🧠 MWI: **{float(mwi):.4f}**")
-        st.caption("MWI는 ‘휴식 전/후 개선율’을 휴식시간(분)으로 나눈 값(분당 효율)입니다.")
+        st.success(f"🧠 정량 MWI: **{float(mwi):.4f}**")
+        st.caption("정량 MWI는 ‘휴식 전/후 개선율’을 휴식시간(분)으로 나눈 값(분당 효율)입니다.")
 
 st.markdown("---")
 st.markdown("### 🗂️ 오늘 로그")
@@ -35,12 +42,14 @@ st.markdown("### 🗂️ 오늘 로그")
 if df_today.empty:
     st.info("오늘 저장된 로그가 없습니다.")
 else:
-    show_cols = [
+    # ✅ 기존 컬럼 유지 + Easy 컬럼은 있으면 같이 보여주기(추가)
+    base_cols = [
         "ts", "work_min", "rest_min",
         "recommend_reason", "recommended_stim", "chosen_stim",
-        "pre_rt", "post_rt", "pre_err", "post_err", "pre_idea", "post_idea", "mwi"
+        "pre_rt", "post_rt", "pre_err", "post_err", "pre_idea", "post_idea", "mwi",
+        "easy_mwi", "easy_q1", "easy_q2", "easy_q3"
     ]
-    show_cols = [c for c in show_cols if c in df_today.columns]
+    show_cols = [c for c in base_cols if c in df_today.columns]
     df_view = df_today[show_cols].copy()
 
     if "recommended_stim" in df_view.columns:
@@ -50,13 +59,23 @@ else:
 
     st.dataframe(df_view.sort_values("ts", ascending=False), use_container_width=True)
 
+    # ✅ 기존: 자극별 평균 정량 MWI (그대로)
     if "mwi" in df_today.columns and df_today["mwi"].notna().any():
-        st.markdown("### 📈 자극별 평균 MWI(오늘)")
+        st.markdown("### 📈 자극별 평균 정량 MWI(오늘)")
         tmp = df_today.copy()
         tmp = tmp[tmp["mwi"].notna()]
         tmp["chosen_name"] = tmp["chosen_stim"].map(lambda x: STIMULI.get(x, x))
         by_stim = tmp.groupby("chosen_name")["mwi"].mean().sort_values(ascending=False)
         st.bar_chart(by_stim)
+
+    # ✅ 추가: 자극별 평균 Easy-MWI
+    if "easy_mwi" in df_today.columns and df_today["easy_mwi"].notna().any():
+        st.markdown("### 📈 자극별 평균 Easy-MWI(오늘)")
+        tmp2 = df_today.copy()
+        tmp2 = tmp2[tmp2["easy_mwi"].notna()]
+        tmp2["chosen_name"] = tmp2["chosen_stim"].map(lambda x: STIMULI.get(x, x))
+        by_stim2 = tmp2.groupby("chosen_name")["easy_mwi"].mean().sort_values(ascending=False)
+        st.bar_chart(by_stim2)
 
 st.markdown("---")
 colA, colB = st.columns(2)
@@ -68,7 +87,8 @@ with colA:
             "pre_metrics", "last_result",
             "recommended_stim", "recommend_reason", "chosen_stim",
             "rest_min", "work_remaining_sec",
-            "prompt_anchor", "fixed_prompt", "breath_anchor"
+            "prompt_anchor", "fixed_prompt", "breath_anchor",
+            "pre_easy"
         ]:
             if k in st.session_state:
                 del st.session_state[k]
